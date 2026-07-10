@@ -1,5 +1,7 @@
 import { uploadBuffer } from '../../../lib/cloudinary';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     const formData = await request.formData();

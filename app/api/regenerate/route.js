@@ -2,6 +2,8 @@ import { regeneratePdf } from '../../../lib/pdf';
 import { regenerateDocx, pdfFieldsToDocx } from '../../../lib/docx';
 import { uploadBuffer } from '../../../lib/cloudinary';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     const body = await request.json();

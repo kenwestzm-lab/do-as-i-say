@@ -1,6 +1,6 @@
 import Groq from 'groq-sdk';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+export const dynamic = 'force-dynamic'; // never statically evaluate this route at build time
 
 // The AI's ONLY job is to decide which existing text fields to change and
 // what to change them to (plus optional watermark/QR requests). It never
@@ -9,6 +9,14 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // accurate instead of relying on the model to "redraw" a document.
 export async function POST(request) {
   try {
+    if (!process.env.GROQ_API_KEY) {
+      return Response.json(
+        { error: 'GROQ_API_KEY is not set in this deployment\'s Environment Variables.' },
+        { status: 500 }
+      );
+    }
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
     const { prompt, type, fields } = await request.json();
     if (!prompt) return Response.json({ error: 'No prompt provided' }, { status: 400 });
 

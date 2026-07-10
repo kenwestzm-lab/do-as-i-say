@@ -1,6 +1,8 @@
 import { extractPdfFields } from '../../../lib/pdf';
 import { extractDocxFields } from '../../../lib/docx';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     const { url, filename } = await request.json();
