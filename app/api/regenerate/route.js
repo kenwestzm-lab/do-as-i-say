@@ -1,6 +1,6 @@
 import { regeneratePdf } from '../../../lib/pdf';
 import { regenerateDocx, pdfFieldsToDocx } from '../../../lib/docx';
-import { uploadBuffer } from '../../../lib/cloudinary';
+import { uploadBuffer, getSignedUrl } from '../../../lib/cloudinary';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +10,10 @@ export async function POST(request) {
     const { url, filename, type, fields, edits, qrEdits, watermark, convertTo } = body;
 
     const fileRes = await fetch(url);
-    if (!fileRes.ok) throw new Error('Could not fetch original file');
+    if (!fileRes.ok) {
+      const bodyText = await fileRes.text().catch(() => '');
+      throw new Error(`Could not fetch original file (HTTP ${fileRes.status}) - ${bodyText.slice(0, 200)}`);
+    }
     const buffer = Buffer.from(await fileRes.arrayBuffer());
 
     let outBuffer;
@@ -18,7 +21,6 @@ export async function POST(request) {
     let contentType;
 
     if (type === 'pdf' && convertTo === 'docx') {
-      // Real PDF -> Word conversion
       outBuffer = await pdfFieldsToDocx(fields);
       outName = filename.replace(/\.pdf$/i, '.docx');
       contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -41,9 +43,10 @@ export async function POST(request) {
     }
 
     const uploaded = await uploadBuffer(outBuffer, outName);
+    const signedUrl = getSignedUrl(uploaded.public_id);
 
     return Response.json({
-      url: uploaded.secure_url,
+      url: signedUrl,
       filename: outName,
       contentType,
     });

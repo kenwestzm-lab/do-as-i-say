@@ -1,4 +1,4 @@
-import { uploadBuffer } from '../../../lib/cloudinary';
+import { uploadBuffer, getSignedUrl } from '../../../lib/cloudinary';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,9 +14,10 @@ export async function POST(request) {
     const buffer = Buffer.from(bytes);
 
     const result = await uploadBuffer(buffer, file.name);
+    const signedUrl = getSignedUrl(result.public_id);
 
     return Response.json({
-      url: result.secure_url,
+      url: signedUrl,
       publicId: result.public_id,
       filename: file.name,
       bytes: result.bytes,
