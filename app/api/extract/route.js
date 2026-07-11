@@ -9,7 +9,10 @@ export async function POST(request) {
     if (!url) return Response.json({ error: 'No url provided' }, { status: 400 });
 
     const fileRes = await fetch(url);
-    if (!fileRes.ok) throw new Error('Could not fetch uploaded file from storage');
+    if (!fileRes.ok) {
+      const bodyText = await fileRes.text().catch(() => '');
+      throw new Error(`Could not fetch uploaded file from storage (HTTP ${fileRes.status} ${fileRes.statusText}) URL: ${url} - ${bodyText.slice(0, 200)}`);
+    }
     const buffer = Buffer.from(await fileRes.arrayBuffer());
 
     const isPdf = filename?.toLowerCase().endsWith('.pdf');
