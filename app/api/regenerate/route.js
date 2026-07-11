@@ -1,20 +1,16 @@
 import { regeneratePdf } from '../../../lib/pdf';
 import { regenerateDocx, pdfFieldsToDocx } from '../../../lib/docx';
-import { uploadBuffer, getSignedUrl } from '../../../lib/cloudinary';
+import { uploadBuffer } from '../../../lib/cloudinary';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { url, filename, type, fields, edits, qrEdits, watermark, convertTo } = body;
+    const { fileBase64, filename, type, fields, edits, qrEdits, watermark, convertTo } = body;
 
-    const fileRes = await fetch(url);
-    if (!fileRes.ok) {
-      const bodyText = await fileRes.text().catch(() => '');
-      throw new Error(`Could not fetch original file (HTTP ${fileRes.status}) - ${bodyText.slice(0, 200)}`);
-    }
-    const buffer = Buffer.from(await fileRes.arrayBuffer());
+    if (!fileBase64) throw new Error('No file data provided');
+    const buffer = Buffer.from(fileBase64, 'base64');
 
     let outBuffer;
     let outName;
@@ -42,13 +38,16 @@ export async function POST(request) {
       return Response.json({ error: 'Unsupported type' }, { status: 400 });
     }
 
-    const uploaded = await uploadBuffer(outBuffer, outName);
-    const signedUrl = getSignedUrl(uploaded.public_id);
+    uploadBuffer(outBuffer, outName).catch(err => {
+      console.warn('Cloudinary storage upload failed (non-blocking):', err.message);
+    });
 
-    return Response.json({
-      url: signedUrl,
-      filename: outName,
-      contentType,
+    return new Response(outBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${outName}"`,
+      },
     });
   } catch (err) {
     console.error('Regenerate error:', err);

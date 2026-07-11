@@ -4,38 +4,34 @@ import { useState } from 'react';
 
 export default function Home() {
   const [file, setFile] = useState(null);
-  const [uploaded, setUploaded] = useState(null); // {url, filename}
-  const [docType, setDocType] = useState(null); // 'pdf' | 'docx'
+  const [fileBase64, setFileBase64] = useState(null);
+  const [filename, setFilename] = useState(null);
+  const [docType, setDocType] = useState(null);
   const [fields, setFields] = useState(null);
-  const [editValues, setEditValues] = useState({}); // id -> newText
+  const [editValues, setEditValues] = useState({});
   const [aiPrompt, setAiPrompt] = useState('');
-  const [resultUrl, setResultUrl] = useState(null);
+  const [resultBlobUrl, setResultBlobUrl] = useState(null);
   const [resultName, setResultName] = useState(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
   async function handleUpload() {
     if (!file) return;
-    setStatus('Uploading...');
+    setStatus('Uploading and extracting...');
     setError('');
+    setResultBlobUrl(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const res = await fetch('/api/extract', { method: 'POST', body: fd });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setUploaded({ url: data.url, filename: data.filename });
-      setStatus('Extracting fields...');
 
-      const extractRes = await fetch('/api/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: data.url, filename: data.filename }),
-      });
-      const extractData = await extractRes.json();
-      if (extractData.error) throw new Error(extractData.error);
-      setDocType(extractData.type);
-      setFields(extractData.fields);
+      setDocType(data.type);
+      setFields(data.fields);
+      setFilename(data.filename);
+      setFileBase64(data.fileBase64);
+      setEditValues({});
       setStatus('Ready to edit.');
     } catch (e) {
       setError(e.message);
@@ -45,10 +41,22 @@ export default function Home() {
 
   function getEditableList() {
     if (!fields) return [];
-    if (docType === 'pdf') {
-      return fields.pages.flatMap(p => p.textItems);
-    }
+    if (docType === 'pdf') return fields.pages.flatMap(p => p.textItems);
     return fields.paragraphs;
+  }
+
+  async function downloadResult(res) {
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Request failed (HTTP ${res.status})`);
+    }
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="(.+)"/);
+    const name = match ? match[1] : 'result';
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    setResultBlobUrl(blobUrl);
+    setResultName(name);
   }
 
   async function handleManualRegenerate(convertTo) {
@@ -63,18 +71,11 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: uploaded.url,
-          filename: uploaded.filename,
-          type: docType,
-          fields,
-          edits,
+          fileBase64, filename, type: docType, fields, edits,
           convertTo: convertTo || undefined,
         }),
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setResultUrl(data.url);
-      setResultName(data.filename);
+      await downloadResult(res);
       setStatus('Done.');
     } catch (e) {
       setError(e.message);
@@ -94,25 +95,18 @@ export default function Home() {
       });
       const aiData = await aiRes.json();
       if (aiData.error) throw new Error(aiData.error);
-
       setStatus(`AI: ${aiData.notes || 'applying changes...'}`);
 
       const res = await fetch('/api/regenerate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: uploaded.url,
-          filename: uploaded.filename,
-          type: docType,
-          fields,
+          fileBase64, filename, type: docType, fields,
           edits: aiData.edits || [],
           watermark: aiData.watermark || null,
         }),
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setResultUrl(data.url);
-      setResultName(data.filename);
+      await downloadResult(res);
       setStatus('Done.');
     } catch (e) {
       setError(e.message);
@@ -169,10 +163,10 @@ export default function Home() {
         </section>
       )}
 
-      {resultUrl && (
+      {resultBlobUrl && (
         <section style={{ border: '1px solid #4a4', borderRadius: 8, padding: 16, marginTop: 16 }}>
           <h3>Result ready</h3>
-          <a href={resultUrl} download={resultName} style={{ color: '#7fd' }}>Download {resultName}</a>
+          <a href={resultBlobUrl} download={resultName} style={{ color: '#7fd' }}>Download {resultName}</a>
         </section>
       )}
     </main>
